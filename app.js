@@ -127,10 +127,10 @@ function initLeafletMap() {
     zoom: 13
   });
 
-  // Dark / Clean OpenStreetMap Tiles
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  // 100% Free OpenStreetMap Tile Layer (API Key 불필요)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap &copy; CARTO'
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(state.map);
 
   state.markersLayer = L.layerGroup().addTo(state.map);
