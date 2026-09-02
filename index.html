@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>서울시 교육 공공서비스예약 AI 챗봇</title>
+  <title>서울시 내 주변 공공교육 지도 & AI 챗봇</title>
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,6 +15,9 @@
   
   <!-- Highlight.js CSS for Code Highlighting -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <!-- Custom Style -->
   <link rel="stylesheet" href="style.css">
@@ -26,77 +29,106 @@
     <header class="app-header">
       <div class="header-left">
         <div class="logo">
-          <i class="fa-solid fa-graduation-cap"></i>
-          <span>서울시 교육예약 AI</span>
+          <i class="fa-solid fa-map-location-dot"></i>
+          <span>서울 공공교육 맵 & AI</span>
         </div>
-        <div class="model-badge" id="currentModelBadge">
-          <i class="fa-solid fa-microchip"></i>
-          <span id="badgeModelName">gemini-2.5-flash</span>
-        </div>
-        <div class="api-status-badge green" id="dataStatusBadge">
-          <i class="fa-solid fa-database"></i>
-          <span>서울시 데이터 연동</span>
+        <div class="view-toggle-group">
+          <button class="toggle-tab-btn active" id="tabChatBtn">
+            <i class="fa-solid fa-comments"></i> <span>AI 대화</span>
+          </button>
+          <button class="toggle-tab-btn" id="tabMapBtn">
+            <i class="fa-solid fa-map"></i> <span>주변 지도</span>
+          </button>
         </div>
       </div>
       <div class="header-right">
+        <button class="btn btn-secondary" id="locateUserBtn" title="내 위치 찾기">
+          <i class="fa-solid fa-location-crosshairs"></i>
+          <span class="btn-text">내 위치</span>
+        </button>
         <button class="btn btn-secondary" id="clearChatBtn" title="대화 초기화">
           <i class="fa-solid fa-rotate-left"></i>
           <span class="btn-text">초기화</span>
         </button>
         <button class="btn btn-primary" id="openSettingsBtn" title="설정">
           <i class="fa-solid fa-gear"></i>
-          <span class="btn-text">설정 & API 키</span>
+          <span class="btn-text">설정</span>
         </button>
       </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="chat-main">
-      <!-- Welcome / Starter Screen -->
-      <div class="welcome-screen" id="welcomeScreen">
-        <div class="welcome-card">
-          <div class="welcome-icon">
-            <i class="fa-solid fa-landmark"></i>
-          </div>
-          <h1>서울시 교육 공공서비스예약 AI</h1>
-          <p>서울시 열린데이터광장의 실시간 교육·강좌 예약 데이터를 기반으로 맞춤형 프로그램을 추천하고 안내합니다.</p>
-          
-          <div class="data-summary-banner" id="dataSummaryBanner">
-            <div class="banner-item">
-              <i class="fa-solid fa-list-check"></i>
-              <span>실시간 데이터 수집 중...</span>
+    <!-- Split / Main Layout Area -->
+    <div class="content-wrapper">
+      <!-- Main Chat Area -->
+      <main class="chat-main" id="chatMainView">
+        <!-- Welcome / Starter Screen -->
+        <div class="welcome-screen" id="welcomeScreen">
+          <div class="welcome-card">
+            <div class="welcome-icon">
+              <i class="fa-solid fa-map-pin"></i>
             </div>
-          </div>
+            <h1>내 주변 서울시 공공교육 탐색 AI</h1>
+            <p>실시간 지도 기반으로 내 주변 교육 강좌와 문화 프로그램을 탐색하고 AI에게 질문해 보세요.</p>
+            
+            <div class="data-summary-banner" id="dataSummaryBanner">
+              <div class="banner-item">
+                <i class="fa-solid fa-spinner fa-spin"></i> 서울시 데이터 로딩 중...
+              </div>
+            </div>
 
-          <div class="prompt-suggestions">
-            <div class="suggestion-chip" data-prompt="종로구에서 어린이 대상으로 진행하는 무료 역사 교육 프로그램을 추천해줘.">
-              <i class="fa-solid fa-child"></i> 종로구 어린이 무료 역사 교육
-            </div>
-            <div class="suggestion-chip" data-prompt="현재 성인이 신청 가능한 무료 교육 강좌 목록을 알려줘.">
-              <i class="fa-solid fa-user-graduate"></i> 성인 대상 무료 교육 강좌
-            </div>
-            <div class="suggestion-chip" data-prompt="중학생이나 청소년이 참여할 수 있는 인턴제나 체험 프로그램이 있니?">
-              <i class="fa-solid fa-users"></i> 청소년/중학생 체험 프로그램
-            </div>
-            <div class="suggestion-chip" data-prompt="서울역사박물관에서 진행 중인 박물관대학이나 역사 강좌 예약 링크 알려줘.">
-              <i class="fa-solid fa-building-columns"></i> 서울역사박물관 진행 강좌
+            <div class="prompt-suggestions">
+              <div class="suggestion-chip" data-prompt="내 주변 반경 3km 안에서 이용 가능한 무료 강좌 알려줘.">
+                <i class="fa-solid fa-location-arrow"></i> 내 주변 반경 3km 무료 강좌
+              </div>
+              <div class="suggestion-chip" data-prompt="종로구 서울역사박물관 근처 강좌 정보와 예약 링크 알려줘.">
+                <i class="fa-solid fa-landmark"></i> 서울역사박물관 강좌 및 지도
+              </div>
+              <div class="suggestion-chip" data-prompt="어린이와 함께 주말에 갈 만한 체험 교육 추천해줘.">
+                <i class="fa-solid fa-child"></i> 어린이/가족 주말 체험 교육
+              </div>
+              <div class="suggestion-chip" data-prompt="현재 성인이 신청 가능한 수강료 무료 역사 강의 추천해줘.">
+                <i class="fa-solid fa-graduation-cap"></i> 성인 무료 역사 강좌 추천
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Messages Stream List -->
-      <div class="messages-container" id="messagesContainer">
-        <!-- Messages will be rendered here dynamically -->
-      </div>
-    </main>
+        <!-- Messages Stream List -->
+        <div class="messages-container" id="messagesContainer">
+          <!-- Messages rendered dynamically -->
+        </div>
+      </main>
+
+      <!-- Map View Drawer / Split Container -->
+      <section class="map-section hidden" id="mapSectionView">
+        <div class="map-toolbar">
+          <div class="toolbar-left">
+            <i class="fa-solid fa-filter"></i>
+            <span class="toolbar-title">거리 필터:</span>
+            <select id="radiusSelect">
+              <option value="all">전체 (서울시 전체)</option>
+              <option value="1">내 위치 반경 1km 이내</option>
+              <option value="3" selected>내 위치 반경 3km 이내</option>
+              <option value="5">내 위치 반경 5km 이내</option>
+            </select>
+          </div>
+          <div class="toolbar-right">
+            <span class="marker-legend"><span class="dot green"></span> 접수중/예약마감</span>
+            <span class="marker-legend"><span class="dot gray"></span> 접수종료</span>
+          </div>
+        </div>
+
+        <!-- Leaflet Map Container -->
+        <div id="mapContainer"></div>
+      </section>
+    </div>
 
     <!-- Input Footer Area -->
     <footer class="chat-footer">
       <div class="input-wrapper">
         <textarea 
           id="userInput" 
-          placeholder="예: '어린이 대상 무료 역사 교육 추천해줘', '종로구 강좌 찾아줘'..." 
+          placeholder="예: '내 위치 근처 역사 교육 추천해줘', '종로구 강좌 지도에서 찾아줘'..." 
           rows="1"></textarea>
         
         <div class="input-actions">
@@ -109,9 +141,9 @@
         </div>
       </div>
       <div class="footer-info">
-        <span><i class="fa-solid fa-bolt"></i> 서울시 공공데이터 API RAG 연동</span>
+        <span><i class="fa-solid fa-map-location-dot"></i> Leaflet.js 지도 연동</span>
         <span class="dot">•</span>
-        <span id="currentPromptStatus">실시간 교육 예약 데이터 조회 적용</span>
+        <span id="locationStatusText">내 위치: 확인 중...</span>
       </div>
     </footer>
   </div>
@@ -149,7 +181,7 @@
           </label>
           <input type="text" id="seoulApiKeyInput" placeholder="sample (샘플키)" value="sample">
           <p class="setting-desc">
-            기본값 <code>sample</code>로 작동합니다. 발급받으신 정식 인증키가 있다면 변경 입력 가능합니다.
+            기본값 <code>sample</code>로 작동합니다.
           </p>
         </div>
 
@@ -178,7 +210,7 @@
           <label for="systemPromptInput">
             <i class="fa-solid fa-user-gear"></i> 시스템 프롬프트 (페르소나)
           </label>
-          <textarea id="systemPromptInput" rows="3" placeholder="AI의 역할이나 행동 방침을 입력하세요.">당신은 서울시 교육 공공서비스예약 데이터를 기반으로 시민들에게 친절하고 정확하게 교육 프로그램을 안내하는 AI 상담원입니다.</textarea>
+          <textarea id="systemPromptInput" rows="3" placeholder="AI의 역할이나 행동 방침을 입력하세요.">당신은 서울시 지도 기반 공공교육 데이터를 이용하여 시민들에게 맞춤형 프로그램과 위치 안내를 제공하는 AI 가이드입니다.</textarea>
         </div>
 
         <!-- Temperature Slider -->
@@ -208,6 +240,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
   <!-- Highlight.js for Syntax Highlighting -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+  <!-- Leaflet JS for Map -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <!-- App JS Logic -->
   <script src="app.js"></script>
 </body>

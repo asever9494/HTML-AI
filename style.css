@@ -1,13 +1,13 @@
 /* ==========================================
-   서울시 교육 공공서비스예약 AI 챗봇 - Modern Dark UI
+   서울시 내 주변 공공교육 지도 & AI 챗봇 - Modern Dark UI
    ========================================== */
 
 :root {
   --bg-dark: #0b0f19;
-  --bg-header: rgba(15, 23, 42, 0.85);
+  --bg-header: rgba(15, 23, 42, 0.88);
   --bg-card: rgba(30, 41, 59, 0.75);
   --bg-card-hover: rgba(30, 41, 59, 0.9);
-  --bg-input: rgba(15, 23, 42, 0.9);
+  --bg-input: rgba(15, 23, 42, 0.92);
   --border-color: rgba(255, 255, 255, 0.1);
   --border-glow: rgba(99, 102, 241, 0.4);
 
@@ -61,7 +61,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   position: relative;
 }
@@ -71,7 +71,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 14px 24px;
   background: var(--bg-header);
   backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--border-color);
@@ -81,7 +81,7 @@ body {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 20px;
 }
 
 .logo {
@@ -101,28 +101,38 @@ body {
   font-size: 1.3rem;
 }
 
-.model-badge {
+.view-toggle-group {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  color: #a5b4fc;
+  padding: 3px;
+  gap: 2px;
 }
 
-.api-status-badge {
+.toggle-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  color: #6ee7b7;
+  transition: all 0.2s ease;
+}
+
+.toggle-tab-btn:hover {
+  color: var(--text-main);
+}
+
+.toggle-tab-btn.active {
+  background: var(--accent-seoul);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 .header-right {
@@ -165,6 +175,14 @@ body {
   background: rgba(255, 255, 255, 0.12);
 }
 
+/* Content Wrapper (Chat & Map Split) */
+.content-wrapper {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
 /* Main Chat Scroll Area */
 .chat-main {
   flex: 1;
@@ -172,6 +190,7 @@ body {
   padding: 24px;
   position: relative;
   scroll-behavior: smooth;
+  transition: all 0.3s ease;
 }
 
 .chat-main::-webkit-scrollbar {
@@ -269,7 +288,147 @@ body {
   color: var(--accent-seoul);
 }
 
-/* Message Stream Container */
+/* Map Section Area */
+.map-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  border-left: 1px solid var(--border-color);
+  position: relative;
+}
+
+.map-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 18px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 5;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  color: var(--text-main);
+}
+
+.toolbar-left select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  font-size: 0.85rem;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: 14px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.marker-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.marker-legend .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.marker-legend .dot.green { background: #10b981; }
+.marker-legend .dot.gray { background: #94a3b8; }
+
+#mapContainer {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Custom Leaflet Popup Design */
+.leaflet-popup-content-wrapper {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+  padding: 4px !important;
+}
+
+.leaflet-popup-tip {
+  background: #0f172a !important;
+}
+
+.map-popup-card {
+  font-family: var(--font-sans);
+  padding: 6px 4px;
+  max-width: 260px;
+}
+
+.map-popup-card h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.map-popup-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  margin-bottom: 8px;
+}
+
+.map-popup-card p {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.map-popup-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.map-popup-btn {
+  flex: 1;
+  padding: 6px 0;
+  text-align: center;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+}
+
+.map-popup-btn.btn-link {
+  background: #10b981;
+  color: #fff;
+}
+
+.map-popup-btn.btn-ask {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+/* Messages Stream Container */
 .messages-container {
   display: flex;
   flex-direction: column;
@@ -776,7 +935,11 @@ input[type=range] {
 }
 
 /* Responsive */
-@media (max-width: 640px) {
+@media (max-width: 840px) {
+  .content-wrapper {
+    flex-direction: column;
+  }
+
   .prompt-suggestions {
     grid-template-columns: 1fr;
   }

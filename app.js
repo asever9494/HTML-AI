@@ -18,10 +18,15 @@ const state = {
   seoulApiKey: localStorage.getItem('seoul_api_key') || 'sample',
   model: initialModel,
   customModel: localStorage.getItem('openrouter_custom_model') || '',
-  systemPrompt: localStorage.getItem('openrouter_system_prompt') || '당신은 서울시 교육 공공서비스예약 데이터를 기반으로 시민들에게 친절하고 정확하게 교육 프로그램을 추천하고 안내하는 AI 전문 상담원입니다.',
+  systemPrompt: localStorage.getItem('openrouter_system_prompt') || '당신은 서울시 내 주변 공공교육 지도 데이터를 이용하여 시민들에게 맞춤형 강좌 및 장소 안내를 제공하는 스마트 AI 어시스턴트입니다.',
   temperature: parseFloat(localStorage.getItem('openrouter_temperature') || '0.5'),
   messages: [],
   educationData: [],
+  userLocation: { lat: 37.5665, lng: 126.9780, name: '서울시청 (기본)' }, // Default Seoul City Hall
+  map: null,
+  markersLayer: null,
+  userMarker: null,
+  activeView: 'chat', // 'chat' or 'map'
   isGenerating: false,
   abortController: null
 };
@@ -49,9 +54,14 @@ const elements = {
   tempValue: document.getElementById('tempValue'),
   saveSettingsBtn: document.getElementById('saveSettingsBtn'),
   resetSettingsBtn: document.getElementById('resetSettingsBtn'),
-  currentModelBadge: document.getElementById('badgeModelName'),
   dataSummaryBanner: document.getElementById('dataSummaryBanner'),
-  dataStatusBadge: document.getElementById('dataStatusBadge')
+  tabChatBtn: document.getElementById('tabChatBtn'),
+  tabMapBtn: document.getElementById('tabMapBtn'),
+  chatMainView: document.getElementById('chatMainView'),
+  mapSectionView: document.getElementById('mapSectionView'),
+  locateUserBtn: document.getElementById('locateUserBtn'),
+  radiusSelect: document.getElementById('radiusSelect'),
+  locationStatusText: document.getElementById('locationStatusText')
 };
 
 // Initialize Application
@@ -59,8 +69,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   initMarked();
   loadSettingsUI();
   setupEventListeners();
-  checkApiKeyStatus();
+  getUserGeolocation();
   await loadSeoulEducationData();
+  initLeafletMap();
 });
 
 // Configure Marked & Highlight.js
@@ -79,6 +90,147 @@ function initMarked() {
   }
 }
 
+// Get User GPS Location
+function getUserGeolocation() {
+  if ('geolocation' in navigator) {
+    elements.locationStatusText.textContent = '내 위치 찾기 위치 권한 요청 중...';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        state.userLocation = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          name: '현재 내 위치'
+        };
+        elements.locationStatusText.textContent = `내 위치: (${state.userLocation.lat.toFixed(4)}, ${state.userLocation.lng.toFixed(4)})`;
+        if (state.map) {
+          updateUserMapMarker();
+          updateMapMarkers();
+        }
+      },
+      (err) => {
+        console.warn('Geolocation Error:', err);
+        elements.locationStatusText.textContent = '내 위치: 서울시청 (기본값 사용)';
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  } else {
+    elements.locationStatusText.textContent = '내 위치: 브라우저 위치 미지원';
+  }
+}
+
+// Initialize Leaflet Map
+function initLeafletMap() {
+  if (!window.L || state.map) return;
+
+  state.map = L.map('mapContainer', {
+    center: [state.userLocation.lat, state.userLocation.lng],
+    zoom: 13
+  });
+
+  // Dark / Clean OpenStreetMap Tiles
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  }).addTo(state.map);
+
+  state.markersLayer = L.layerGroup().addTo(state.map);
+  updateUserMapMarker();
+  updateMapMarkers();
+}
+
+// Update User Marker on Map
+function updateUserMapMarker() {
+  if (!state.map) return;
+
+  if (state.userMarker) {
+    state.map.removeLayer(state.userMarker);
+  }
+
+  const userIcon = L.divIcon({
+    className: 'user-gps-marker',
+    html: `<div style="background:#3b82f6; width:16px; height:16px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 12px rgba(59,130,246,0.8);"></div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+
+  state.userMarker = L.marker([state.userLocation.lat, state.userLocation.lng], { icon: userIcon })
+    .addTo(state.map)
+    .bindPopup(`<strong>📍 내 위치</strong><br>${state.userLocation.name}`);
+}
+
+// Update Program Markers on Map
+function updateMapMarkers() {
+  if (!state.map || !state.markersLayer) return;
+
+  state.markersLayer.clearLayers();
+  const radiusFilter = elements.radiusSelect.value;
+  const maxRadiusKm = radiusFilter === 'all' ? 999 : parseFloat(radiusFilter);
+
+  state.educationData.forEach(item => {
+    const lat = parseFloat(item.lat || item.Y);
+    const lng = parseFloat(item.lng || item.X);
+
+    if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
+
+    const distKm = calculateDistance(state.userLocation.lat, state.userLocation.lng, lat, lng);
+    item.distKm = distKm;
+
+    if (distKm <= maxRadiusKm) {
+      const isAvailable = item.status === '접수중' || item.status === '안내중';
+      const markerColor = isAvailable ? '#10b981' : '#64748b';
+
+      const customIcon = L.divIcon({
+        className: 'program-pin-marker',
+        html: `<div style="background:${markerColor}; width:14px; height:14px; border-radius:50%; border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,0.5);"></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+      });
+
+      const popupHtml = `
+        <div class="map-popup-card">
+          <span class="map-popup-tag">${item.category} • ${item.payType}</span>
+          <h4>${item.title}</h4>
+          <p><i class="fa-solid fa-location-dot"></i> ${item.place} (${item.area})</p>
+          <p><i class="fa-solid fa-user"></i> ${item.target}</p>
+          <p><i class="fa-solid fa-route"></i> 내 위치에서 ${distKm.toFixed(1)}km</p>
+          <div class="map-popup-actions">
+            <a href="${item.url}" target="_blank" class="map-popup-btn btn-link">예약하기</a>
+            <button onclick="askAboutProgram('${item.id}')" class="map-popup-btn btn-ask">AI 질문</button>
+          </div>
+        </div>
+      `;
+
+      const marker = L.marker([lat, lng], { icon: customIcon })
+        .bindPopup(popupHtml);
+
+      state.markersLayer.addLayer(marker);
+    }
+  });
+}
+
+// Global handler to ask AI about specific program from map popup
+window.askAboutProgram = function(id) {
+  const item = state.educationData.find(d => d.id === id);
+  if (item) {
+    elements.userInput.value = `'${item.title}' (${item.place}) 강좌 상세 정보와 수강 대상, 예약 방법을 안내해줘.`;
+    switchView('chat');
+    handleSend();
+  }
+};
+
+// Calculate Haversine Distance between two points in km
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // Fetch & Load Real-time Seoul Public Reservation Education Data
 async function loadSeoulEducationData() {
   const key = state.seoulApiKey || 'sample';
@@ -86,7 +238,7 @@ async function loadSeoulEducationData() {
   const url = `http://openAPI.seoul.go.kr:8088/${key}/json/ListPublicReservationEducation/1/${limit}/`;
 
   try {
-    elements.dataSummaryBanner.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 서울시 열린데이터광장에서 교육 예약 데이터 불러오는 중...`;
+    elements.dataSummaryBanner.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 서울시 열린데이터광장에서 교육 및 지도 데이터 불러오는 중...`;
     
     const response = await fetch(url);
     if (!response.ok) throw new Error(`API HTTP ${response.status}`);
@@ -105,6 +257,8 @@ async function loadSeoulEducationData() {
         target: cleanText(item.USETGTINFO) || '누구나',
         url: item.SVCURL,
         area: item.AREANM || '서울시',
+        lat: parseFloat(item.Y) || 37.5705,
+        lng: parseFloat(item.X) || 126.9703,
         openStart: item.SVCOPNBGNDT ? item.SVCOPNBGNDT.substring(0, 10) : '',
         openEnd: item.SVCOPNENDDT ? item.SVCOPNENDDT.substring(0, 10) : '',
         receiptStart: item.RCPTBGNDT ? item.RCPTBGNDT.substring(0, 16) : '',
@@ -116,22 +270,27 @@ async function loadSeoulEducationData() {
       const totalCount = resultData.list_total_count || state.educationData.length;
       elements.dataSummaryBanner.innerHTML = `
         <i class="fa-solid fa-circle-check" style="color:#10b981;"></i> 
-        서울시 실시간 공공교육 예약 데이터 <strong>${state.educationData.length}건</strong> (전체 ${totalCount}건) 로드 완료!
+        서울시 실시간 공공교육 데이터 <strong>${state.educationData.length}건</strong> (지도 좌표 포함) 연동 완료!
       `;
+
+      if (state.map) {
+        updateMapMarkers();
+      }
     } else {
       throw new Error(resultData?.RESULT?.MESSAGE || '데이터 없음');
     }
   } catch (err) {
-    console.warn('서울시 API 연동 경고 (샘플 데이터 사용):', err);
+    console.warn('서울시 API 연동 경고 (기본 데이터 사용):', err);
     elements.dataSummaryBanner.innerHTML = `
       <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;"></i> 
-      서울시 API 호출 제한/네트워크 오류로 기본 교육 샘플 데이터로 동작합니다.
+      기본 교육 샘플 데이터로 동작합니다.
     `;
     useFallbackEducationData();
+    if (state.map) updateMapMarkers();
   }
 }
 
-// Fallback sample education data
+// Fallback sample education data with Coordinates
 function useFallbackEducationData() {
   state.educationData = [
     {
@@ -144,6 +303,8 @@ function useFallbackEducationData() {
       target: "어린이(내 친구 박물관)",
       url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260210133959300415",
       area: "종로구",
+      lat: 37.570500279648634,
+      lng: 126.97037430869801,
       receiptStart: "2026-02-19 10:00",
       receiptEnd: "2026-03-09 18:00",
       tel: "02-724-0236"
@@ -158,6 +319,8 @@ function useFallbackEducationData() {
       target: "성인(55세 이상 성인)",
       url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260519103905622756",
       area: "종로구",
+      lat: 37.570500279648634,
+      lng: 126.97037430869801,
       receiptStart: "2026-08-19 10:00",
       receiptEnd: "2026-08-30 17:00",
       tel: "02-724-0199"
@@ -172,6 +335,8 @@ function useFallbackEducationData() {
       target: "청소년(중학생 1-3학년)",
       url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260622155501556026",
       area: "종로구",
+      lat: 37.570500279648634,
+      lng: 126.97037430869801,
       receiptStart: "2026-06-29 10:00",
       receiptEnd: "2026-07-31 17:00",
       tel: "02-724-0236"
@@ -186,6 +351,8 @@ function useFallbackEducationData() {
       target: "성인",
       url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260804164236879206",
       area: "종로구",
+      lat: 37.570500279648634,
+      lng: 126.97037430869801,
       receiptStart: "2026-08-14 10:00",
       receiptEnd: "2026-08-21 17:00",
       tel: "02-724-0199"
@@ -200,6 +367,8 @@ function useFallbackEducationData() {
       target: "가족(초등학교 1~6학년 자녀 동반)",
       url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260806090535821750",
       area: "종로구",
+      lat: 37.570500279648634,
+      lng: 126.97037430869801,
       receiptStart: "2026-08-24 10:00",
       receiptEnd: "2026-11-15 17:00",
       tel: "02-724-9750"
@@ -213,17 +382,25 @@ function cleanText(text) {
   return text.replace(/<[^>]*>?/gm, '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&middot;/g, '·').trim();
 }
 
-// Search Relevant Programs based on User Question
+// Search Relevant Programs based on User Question (With Distance Ranking)
 function findRelevantEducationItems(query) {
   if (!state.educationData || state.educationData.length === 0) return [];
   
   const q = query.toLowerCase();
   const keywords = q.split(/\s+/).filter(k => k.length > 1);
 
-  // Score each item based on keyword matches
   const scored = state.educationData.map(item => {
     let score = 0;
     const fullContent = `${item.title} ${item.category} ${item.area} ${item.place} ${item.target} ${item.payType} ${item.status}`.toLowerCase();
+
+    // Distance bonus for nearby programs
+    const dist = item.distKm || calculateDistance(state.userLocation.lat, state.userLocation.lng, item.lat, item.lng);
+    item.distKm = dist;
+    
+    if (q.includes('내 주변') || q.includes('근처') || q.includes('가까운')) {
+      if (dist <= 3) score += 5;
+      else if (dist <= 5) score += 3;
+    }
 
     if (q.includes('어린이') || q.includes('초등')) {
       if (item.target.includes('어린이') || item.target.includes('초등') || item.target.includes('가족')) score += 3;
@@ -231,7 +408,7 @@ function findRelevantEducationItems(query) {
     if (q.includes('성인') || q.includes('시니어')) {
       if (item.target.includes('성인')) score += 3;
     }
-    if (q.includes('청소년') || q.includes('중학생') || q.includes('고등')) {
+    if (q.includes('청소년') || q.includes('중학생')) {
       if (item.target.includes('청소년') || item.target.includes('중학생')) score += 3;
     }
     if (q.includes('무료')) {
@@ -248,7 +425,6 @@ function findRelevantEducationItems(query) {
     return { item, score };
   });
 
-  // Filter items with score > 0 or top items
   scored.sort((a, b) => b.score - a.score);
   const matched = scored.filter(s => s.score > 0).map(s => s.item);
 
@@ -258,9 +434,6 @@ function findRelevantEducationItems(query) {
 // Check API key status
 function checkApiKeyStatus() {
   const activeKey = getActiveApiKey();
-  if (activeKey) {
-    elements.dataStatusBadge.classList.add('green');
-  }
 }
 
 // Get active OpenRouter API key
@@ -279,7 +452,6 @@ function loadSettingsUI() {
   elements.apiKeyInput.value = getActiveApiKey();
   elements.seoulApiKeyInput.value = state.seoulApiKey || 'sample';
 
-  // Set Model Select
   const options = Array.from(elements.modelSelect.options).map(opt => opt.value);
   if (options.includes(state.model)) {
     elements.modelSelect.value = state.model;
@@ -293,15 +465,6 @@ function loadSettingsUI() {
   elements.systemPromptInput.value = state.systemPrompt;
   elements.tempSlider.value = state.temperature;
   elements.tempValue.textContent = state.temperature.toFixed(1);
-
-  updateModelBadge();
-}
-
-// Update model badge label in header
-function updateModelBadge() {
-  const currentModel = getActiveModel();
-  const shortName = currentModel.split('/').pop() || currentModel;
-  elements.currentModelBadge.textContent = shortName;
 }
 
 // Get final selected model ID
@@ -312,8 +475,44 @@ function getActiveModel() {
   return elements.modelSelect.value;
 }
 
+// Switch between Chat and Map views
+function switchView(viewName) {
+  state.activeView = viewName;
+  if (viewName === 'chat') {
+    elements.tabChatBtn.classList.add('active');
+    elements.tabMapBtn.classList.remove('active');
+    elements.chatMainView.classList.remove('hidden');
+    elements.mapSectionView.classList.add('hidden');
+  } else {
+    elements.tabChatBtn.classList.remove('active');
+    elements.tabMapBtn.classList.add('active');
+    elements.chatMainView.classList.add('hidden');
+    elements.mapSectionView.classList.remove('hidden');
+    
+    // Invalidate Leaflet map size on show
+    setTimeout(() => {
+      if (state.map) {
+        state.map.invalidateSize();
+      }
+    }, 100);
+  }
+}
+
 // Setup Event Listeners
 function setupEventListeners() {
+  // Tab View Switch
+  elements.tabChatBtn.addEventListener('click', () => switchView('chat'));
+  elements.tabMapBtn.addEventListener('click', () => switchView('map'));
+
+  // User GPS locate button
+  elements.locateUserBtn.addEventListener('click', () => {
+    getUserGeolocation();
+    switchView('map');
+  });
+
+  // Radius Select Filter Change
+  elements.radiusSelect.addEventListener('change', updateMapMarkers);
+
   // Auto-resize textarea
   elements.userInput.addEventListener('input', () => {
     elements.userInput.style.height = 'auto';
@@ -409,8 +608,6 @@ async function saveSettings() {
   localStorage.setItem('openrouter_temperature', temperature.toString());
 
   checkApiKeyStatus();
-  updateModelBadge();
-
   elements.settingsModal.classList.add('hidden');
   await loadSeoulEducationData();
   alert('설정이 성공적으로 저장되었습니다!');
@@ -421,7 +618,7 @@ function resetSettings() {
   state.apiKey = OPENROUTER_API_KEY;
   state.seoulApiKey = 'sample';
   state.model = 'google/gemini-2.5-flash';
-  state.systemPrompt = '당신은 서울시 교육 공공서비스예약 데이터를 기반으로 시민들에게 친절하고 정확하게 교육 프로그램을 추천하고 안내하는 AI 전문 상담원입니다.';
+  state.systemPrompt = '당신은 서울시 내 주변 공공교육 지도 데이터를 이용하여 시민들에게 맞춤형 강좌 및 장소 안내를 제공하는 스마트 AI 어시스턴트입니다.';
   state.temperature = 0.5;
 
   localStorage.removeItem('openrouter_api_key');
@@ -455,7 +652,7 @@ function handleStop() {
   }
 }
 
-// Send User Message with Context Injection
+// Send User Message with Location & Context Injection
 async function handleSend() {
   const userText = elements.userInput.value.trim();
   if (!userText || state.isGenerating) return;
@@ -471,26 +668,29 @@ async function handleSend() {
   elements.userInput.value = '';
   elements.userInput.style.height = 'auto';
 
-  // Hide Welcome Screen
+  // Hide Welcome Screen & Ensure Chat View
   elements.welcomeScreen.classList.add('hidden');
+  if (state.activeView !== 'chat') {
+    switchView('chat');
+  }
 
   // Add User Message to UI & State
   appendMessage('user', userText);
   state.messages.push({ role: 'user', content: userText });
 
-  // Retrieve matching Seoul Public Service Education Items
+  // Retrieve matching Seoul Public Service Education Items & Distances
   const relevantItems = findRelevantEducationItems(userText);
-  let dataContext = '';
+  let dataContext = `\n\n[사용자 현재 위치 정보]\n- 위도: ${state.userLocation.lat.toFixed(4)}, 경도: ${state.userLocation.lng.toFixed(4)} (${state.userLocation.name})\n`;
   
   if (relevantItems.length > 0) {
-    dataContext = `\n\n[실시간 서울시 공공서비스예약 교육 데이터 참고 정보]\n` +
+    dataContext += `\n[실시간 서울시 공공교육 지도 추천 정보]\n` +
       relevantItems.map((item, idx) => `
 ${idx + 1}. 강좌명: ${item.title}
    - 분류/상태: ${item.category} / ${item.status} (${item.payType})
    - 대상: ${item.target}
-   - 장소: ${item.place} (${item.area})
+   - 장소/지역: ${item.place} (${item.area})
+   - 내 위치에서의 거리: 약 ${item.distKm ? item.distKm.toFixed(1) : '?'}km
    - 접수기간: ${item.receiptStart} ~ ${item.receiptEnd}
-   - 문의전화: ${item.tel}
    - 예약링크: ${item.url}
       `).join('\n');
   }
@@ -506,7 +706,7 @@ ${idx + 1}. 강좌명: ${item.title}
   let accumulatedContent = '';
 
   try {
-    const fullSystemPrompt = `${state.systemPrompt}\n\n시민의 질문을 참고할 때 제공된 실시간 서울시 교육예약 정보 데이터에 기반하여 답변하세요. 각 추천 프로그램마다 **[예약 바로가기](URL)** 링크와 대상, 장소, 요금을 명확히 카드 형태로 정돈하여 답변해 주세요.${dataContext}`;
+    const fullSystemPrompt = `${state.systemPrompt}\n\n사용자의 위치와 실시간 서울시 교육 데이터 기반으로 가장 가까운 유용한 강좌를 추천하세요. 각 추천 프로그램마다 **[예약 바로가기](URL)** 링크와 거리(km), 장소를 카드 형태로 작성해 주세요.${dataContext}`;
 
     const apiMessages = [
       { role: 'system', content: fullSystemPrompt },
@@ -518,7 +718,7 @@ ${idx + 1}. 강좌명: ${item.title}
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'HTTP-Referer': window.location.href,
-        'X-Title': 'Seoul Education Reservation AI Chatbot',
+        'X-Title': 'Seoul Nearby Education Map AI Chatbot',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -579,7 +779,7 @@ ${idx + 1}. 강좌명: ${item.title}
       updateAssistantBubble(assistantBubble, accumulatedContent);
     } else {
       console.error('OpenRouter API Call Error:', error);
-      const errDisplay = `⚠️ **오류가 발생했습니다.**\n\n\`${error.message}\`\n\n- API 키가 유효한지 확인해보세요.\n- 선택한 모델(${getActiveModel()})이 사용 가능한 상태인지 확인하세요.`;
+      const errDisplay = `⚠️ **오류가 발생했습니다.**\n\n\`${error.message}\`\n\n- API 키가 유효한지 확인해보세요.`;
       updateAssistantBubble(assistantBubble, errDisplay);
     }
   } finally {
@@ -609,7 +809,7 @@ function appendMessage(role, content, isTyping = false) {
   avatar.className = 'avatar';
   avatar.innerHTML = role === 'user' 
     ? '<i class="fa-solid fa-user"></i>' 
-    : '<i class="fa-solid fa-landmark"></i>';
+    : '<i class="fa-solid fa-map-location-dot"></i>';
 
   const wrapper = document.createElement('div');
   wrapper.className = 'message-content-wrapper';
