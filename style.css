@@ -1,11 +1,11 @@
 /* ==========================================
-   OpenRouter AI Chatbot - Modern Dark UI
+   서울시 교육 공공서비스예약 AI 챗봇 - Modern Dark UI
    ========================================== */
 
 :root {
   --bg-dark: #0b0f19;
-  --bg-header: rgba(15, 23, 42, 0.8);
-  --bg-card: rgba(30, 41, 59, 0.7);
+  --bg-header: rgba(15, 23, 42, 0.85);
+  --bg-card: rgba(30, 41, 59, 0.75);
   --bg-card-hover: rgba(30, 41, 59, 0.9);
   --bg-input: rgba(15, 23, 42, 0.9);
   --border-color: rgba(255, 255, 255, 0.1);
@@ -15,7 +15,9 @@
   --primary-hover: #4f46e5;
   --primary-glow: rgba(99, 102, 241, 0.25);
   --accent-cyan: #06b6d4;
+  --accent-seoul: #10b981;
   --accent-gradient: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+  --seoul-gradient: linear-gradient(135deg, #059669 0%, #10b981 100%);
   --user-msg-gradient: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
 
   --text-main: #f8fafc;
@@ -51,7 +53,7 @@ body {
   overflow: hidden;
   background-image: 
     radial-gradient(at 10% 10%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-    radial-gradient(at 90% 90%, rgba(6, 182, 212, 0.12) 0px, transparent 50%);
+    radial-gradient(at 90% 90%, rgba(16, 185, 129, 0.12) 0px, transparent 50%);
 }
 
 /* Layout */
@@ -79,7 +81,7 @@ body {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .logo {
@@ -109,6 +111,18 @@ body {
   border-radius: var(--radius-full);
   font-size: 0.8rem;
   color: #a5b4fc;
+}
+
+.api-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  color: #6ee7b7;
 }
 
 .header-right {
@@ -178,7 +192,7 @@ body {
 }
 
 .welcome-card {
-  max-width: 680px;
+  max-width: 720px;
   text-align: center;
   padding: 40px 30px;
   background: var(--bg-card);
@@ -189,17 +203,17 @@ body {
 }
 
 .welcome-icon {
-  width: 64px;
-  height: 64px;
+  width: 68px;
+  height: 68px;
   margin: 0 auto 20px;
-  background: var(--accent-gradient);
+  background: var(--seoul-gradient);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.8rem;
+  font-size: 1.9rem;
   color: #fff;
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
 }
 
 .welcome-card h1 {
@@ -211,30 +225,17 @@ body {
 .welcome-card p {
   color: var(--text-muted);
   font-size: 0.95rem;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
-.key-warning-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
-  background: rgba(234, 179, 8, 0.1);
-  border: 1px solid rgba(234, 179, 8, 0.3);
+.data-summary-banner {
+  padding: 12px 18px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
   border-radius: var(--radius-md);
-  text-align: left;
   margin-bottom: 24px;
-  font-size: 0.88rem;
-}
-
-.key-warning-card .warning-icon {
-  font-size: 1.4rem;
-  color: #facc15;
-}
-
-.key-warning-card p {
-  margin: 0;
-  color: #fef08a;
+  font-size: 0.9rem;
+  color: #a7f3d0;
 }
 
 .prompt-suggestions {
@@ -259,13 +260,13 @@ body {
 }
 
 .suggestion-chip:hover {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: var(--primary-color);
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--accent-seoul);
   transform: translateY(-2px);
 }
 
 .suggestion-chip i {
-  color: var(--accent-cyan);
+  color: var(--accent-seoul);
 }
 
 /* Message Stream Container */
@@ -273,7 +274,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 860px;
+  max-width: 880px;
   margin: 0 auto;
 }
 
@@ -293,13 +294,13 @@ body {
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   flex-shrink: 0;
 }
 
@@ -309,17 +310,17 @@ body {
 }
 
 .assistant-row .avatar {
-  background: var(--accent-gradient);
+  background: var(--seoul-gradient);
   color: #fff;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
 }
 
 .message-content-wrapper {
-  max-width: 80%;
+  max-width: 82%;
 }
 
 .message-bubble {
-  padding: 14px 18px;
+  padding: 16px 20px;
   border-radius: var(--radius-lg);
   font-size: 0.95rem;
   position: relative;
@@ -349,11 +350,28 @@ body {
   margin-bottom: 0;
 }
 
-/* Markdown formatting inside Assistant Bubble */
+/* Reservation Links & Styled Markdown Cards */
+.message-bubble a {
+  color: var(--accent-cyan);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent-cyan);
+  transition: all 0.2s;
+}
+
+.message-bubble a:hover {
+  color: #38bdf8;
+  border-bottom-style: solid;
+}
+
+.message-bubble strong {
+  color: #f1f5f9;
+}
+
 .message-bubble h1, .message-bubble h2, .message-bubble h3 {
   margin-top: 0.8em;
   margin-bottom: 0.4em;
   font-weight: 600;
+  color: #6ee7b7;
 }
 
 .message-bubble ul, .message-bubble ol {
@@ -362,10 +380,14 @@ body {
 }
 
 .message-bubble blockquote {
-  border-left: 3px solid var(--primary-color);
+  border-left: 3px solid var(--accent-seoul);
   padding-left: 12px;
   color: var(--text-muted);
   margin: 0.8em 0;
+  background: rgba(16, 185, 129, 0.05);
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 .message-bubble table {
@@ -443,7 +465,7 @@ body {
   line-height: 1.5;
 }
 
-/* Cursor / Typing Indicator */
+/* Typing Indicator */
 .typing-indicator {
   display: inline-flex;
   align-items: center;
@@ -455,7 +477,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--accent-cyan);
+  background-color: var(--accent-seoul);
   animation: pulse 1.2s infinite ease-in-out;
 }
 
@@ -493,8 +515,8 @@ body {
 }
 
 .input-wrapper:focus-within {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 15px var(--primary-glow);
+  border-color: var(--accent-seoul);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
 }
 
 #userInput {
@@ -534,9 +556,9 @@ body {
 }
 
 .send-btn {
-  background: var(--accent-gradient);
+  background: var(--seoul-gradient);
   color: #fff;
-  box-shadow: 0 2px 8px var(--primary-glow);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
 }
 
 .send-btn:hover {
@@ -586,7 +608,7 @@ body {
 }
 
 .settings-drawer {
-  width: 420px;
+  width: 440px;
   max-width: 90vw;
   height: 100%;
   background: #0f172a;
@@ -697,6 +719,7 @@ body {
 
 .setting-group select,
 .setting-group textarea,
+.setting-group input[type="text"],
 .custom-model-input input {
   width: 100%;
   padding: 10px 12px;
@@ -710,8 +733,9 @@ body {
 
 .setting-group select:focus,
 .setting-group textarea:focus,
+.setting-group input[type="text"]:focus,
 .password-input-group input:focus {
-  border-color: var(--primary-color);
+  border-color: var(--accent-seoul);
 }
 
 .slider-header {
@@ -723,12 +747,12 @@ body {
 .slider-value {
   font-size: 0.85rem;
   font-family: var(--font-mono);
-  color: var(--accent-cyan);
+  color: var(--accent-seoul);
 }
 
 input[type=range] {
   width: 100%;
-  accent-color: var(--primary-color);
+  accent-color: var(--accent-seoul);
 }
 
 .slider-labels {

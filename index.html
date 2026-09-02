@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenRouter Direct AI Chatbot</title>
+  <title>서울시 교육 공공서비스예약 AI 챗봇</title>
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,12 +26,16 @@
     <header class="app-header">
       <div class="header-left">
         <div class="logo">
-          <i class="fa-solid fa-brain"></i>
-          <span>OpenRouter AI</span>
+          <i class="fa-solid fa-graduation-cap"></i>
+          <span>서울시 교육예약 AI</span>
         </div>
         <div class="model-badge" id="currentModelBadge">
           <i class="fa-solid fa-microchip"></i>
           <span id="badgeModelName">gemini-2.5-flash</span>
+        </div>
+        <div class="api-status-badge green" id="dataStatusBadge">
+          <i class="fa-solid fa-database"></i>
+          <span>서울시 데이터 연동</span>
         </div>
       </div>
       <div class="header-right">
@@ -52,31 +56,30 @@
       <div class="welcome-screen" id="welcomeScreen">
         <div class="welcome-card">
           <div class="welcome-icon">
-            <i class="fa-solid fa-sparkles"></i>
+            <i class="fa-solid fa-landmark"></i>
           </div>
-          <h1>무엇이든 물어보세요!</h1>
-          <p>백엔드 없이 오픈라우터(OpenRouter) API를 직접 연결하여 구동되는 스마트 AI 챗봇입니다.</p>
+          <h1>서울시 교육 공공서비스예약 AI</h1>
+          <p>서울시 열린데이터광장의 실시간 교육·강좌 예약 데이터를 기반으로 맞춤형 프로그램을 추천하고 안내합니다.</p>
           
-          <div class="key-warning-card" id="keyWarningBox">
-            <i class="fa-solid fa-key warning-icon"></i>
-            <div>
-              <strong>오픈라우터 API 키 준비</strong>
-              <p><code>app.js</code> 파일 상단 <code>OPENROUTER_API_KEY</code>에 키를 삽입하거나 우측 상단 <strong>[설정]</strong> 메뉴에서 입력해주세요.</p>
+          <div class="data-summary-banner" id="dataSummaryBanner">
+            <div class="banner-item">
+              <i class="fa-solid fa-list-check"></i>
+              <span>실시간 데이터 수집 중...</span>
             </div>
           </div>
 
           <div class="prompt-suggestions">
-            <div class="suggestion-chip" data-prompt="오픈라우터 API와 LLM의 주요 장점을 설명해줘.">
-              <i class="fa-regular fa-lightbulb"></i> OpenRouter의 특징과 장점
+            <div class="suggestion-chip" data-prompt="종로구에서 어린이 대상으로 진행하는 무료 역사 교육 프로그램을 추천해줘.">
+              <i class="fa-solid fa-child"></i> 종로구 어린이 무료 역사 교육
             </div>
-            <div class="suggestion-chip" data-prompt="JavaScript로 간단한 배열 다루기 예제 코드를 작성해줘.">
-              <i class="fa-solid fa-code"></i> JS 배열 사용 예제 작성
+            <div class="suggestion-chip" data-prompt="현재 성인이 신청 가능한 무료 교육 강좌 목록을 알려줘.">
+              <i class="fa-solid fa-user-graduate"></i> 성인 대상 무료 교육 강좌
             </div>
-            <div class="suggestion-chip" data-prompt="파이썬(Python)으로 웹 스크래핑을 하는 기초 코드를 알려줘.">
-              <i class="fa-brands fa-python"></i> Python 웹 스크래핑 코드
+            <div class="suggestion-chip" data-prompt="중학생이나 청소년이 참여할 수 있는 인턴제나 체험 프로그램이 있니?">
+              <i class="fa-solid fa-users"></i> 청소년/중학생 체험 프로그램
             </div>
-            <div class="suggestion-chip" data-prompt="직장인을 위한 생산성 향상 AI 활용 팁 3가지를 추천해줘.">
-              <i class="fa-solid fa-rocket"></i> 생산성 향상 AI 활용법
+            <div class="suggestion-chip" data-prompt="서울역사박물관에서 진행 중인 박물관대학이나 역사 강좌 예약 링크 알려줘.">
+              <i class="fa-solid fa-building-columns"></i> 서울역사박물관 진행 강좌
             </div>
           </div>
         </div>
@@ -93,7 +96,7 @@
       <div class="input-wrapper">
         <textarea 
           id="userInput" 
-          placeholder="메시지를 입력하세요... (Shift + Enter로 줄바꿈)" 
+          placeholder="예: '어린이 대상 무료 역사 교육 추천해줘', '종로구 강좌 찾아줘'..." 
           rows="1"></textarea>
         
         <div class="input-actions">
@@ -106,9 +109,9 @@
         </div>
       </div>
       <div class="footer-info">
-        <span><i class="fa-solid fa-bolt"></i> Streaming Enabled</span>
+        <span><i class="fa-solid fa-bolt"></i> 서울시 공공데이터 API RAG 연동</span>
         <span class="dot">•</span>
-        <span id="currentPromptStatus">기본 시스템 프롬프트 적용 중</span>
+        <span id="currentPromptStatus">실시간 교육 예약 데이터 조회 적용</span>
       </div>
     </footer>
   </div>
@@ -117,12 +120,12 @@
   <div class="modal-overlay hidden" id="settingsModal">
     <div class="settings-drawer">
       <div class="drawer-header">
-        <h2><i class="fa-solid fa-sliders"></i> AI 챗봇 설정</h2>
+        <h2><i class="fa-solid fa-sliders"></i> AI & 데이터 설정</h2>
         <button class="close-btn" id="closeSettingsBtn"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <div class="drawer-body">
-        <!-- API Key Input Section -->
+        <!-- OpenRouter API Key Input Section -->
         <div class="setting-group">
           <label for="apiKeyInput">
             <i class="fa-solid fa-key"></i> OpenRouter API Key 
@@ -135,7 +138,18 @@
             </button>
           </div>
           <p class="setting-desc">
-            <code>app.js</code> 코드 안의 <code>OPENROUTER_API_KEY</code> 상수를 설정하거나, 이 입력창에 직접 넣을 수 있습니다.
+            AI 답변 생성을 위한 OpenRouter API Key를 입력하세요.
+          </p>
+        </div>
+
+        <!-- Seoul Open Data API Key Section -->
+        <div class="setting-group">
+          <label for="seoulApiKeyInput">
+            <i class="fa-solid fa-database"></i> 서울시 열린데이터광장 API 인증키
+          </label>
+          <input type="text" id="seoulApiKeyInput" placeholder="sample (샘플키)" value="sample">
+          <p class="setting-desc">
+            기본값 <code>sample</code>로 작동합니다. 발급받으신 정식 인증키가 있다면 변경 입력 가능합니다.
           </p>
         </div>
 
@@ -164,19 +178,19 @@
           <label for="systemPromptInput">
             <i class="fa-solid fa-user-gear"></i> 시스템 프롬프트 (페르소나)
           </label>
-          <textarea id="systemPromptInput" rows="3" placeholder="AI의 역할이나 행동 방침을 입력하세요.">당신은 친절하고 전문적이며 명확한 설명을 제공하는 스마트 AI 어시스턴트입니다.</textarea>
+          <textarea id="systemPromptInput" rows="3" placeholder="AI의 역할이나 행동 방침을 입력하세요.">당신은 서울시 교육 공공서비스예약 데이터를 기반으로 시민들에게 친절하고 정확하게 교육 프로그램을 안내하는 AI 상담원입니다.</textarea>
         </div>
 
         <!-- Temperature Slider -->
         <div class="setting-group">
           <div class="slider-header">
             <label for="tempSlider"><i class="fa-solid fa-temperature-half"></i> 창의성 (Temperature)</label>
-            <span class="slider-value" id="tempValue">0.7</span>
+            <span class="slider-value" id="tempValue">0.5</span>
           </div>
-          <input type="range" id="tempSlider" min="0" max="2" step="0.1" value="0.7">
+          <input type="range" id="tempSlider" min="0" max="2" step="0.1" value="0.5">
           <div class="slider-labels">
             <span>정확함 (0.0)</span>
-            <span>균형 (0.7)</span>
+            <span>추천용 (0.5)</span>
             <span>창의적 (2.0)</span>
           </div>
         </div>

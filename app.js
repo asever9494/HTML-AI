@@ -15,11 +15,13 @@ const initialModel = (!storedModel || storedModel === 'google/gemini-2.5-flash:f
 
 const state = {
   apiKey: OPENROUTER_API_KEY || localStorage.getItem('openrouter_api_key') || '',
+  seoulApiKey: localStorage.getItem('seoul_api_key') || 'sample',
   model: initialModel,
   customModel: localStorage.getItem('openrouter_custom_model') || '',
-  systemPrompt: localStorage.getItem('openrouter_system_prompt') || '당신은 친절하고 전문적이며 명확한 설명을 제공하는 스마트 AI 어시스턴트입니다.',
-  temperature: parseFloat(localStorage.getItem('openrouter_temperature') || '0.7'),
+  systemPrompt: localStorage.getItem('openrouter_system_prompt') || '당신은 서울시 교육 공공서비스예약 데이터를 기반으로 시민들에게 친절하고 정확하게 교육 프로그램을 추천하고 안내하는 AI 전문 상담원입니다.',
+  temperature: parseFloat(localStorage.getItem('openrouter_temperature') || '0.5'),
   messages: [],
+  educationData: [],
   isGenerating: false,
   abortController: null
 };
@@ -36,6 +38,7 @@ const elements = {
   closeSettingsBtn: document.getElementById('closeSettingsBtn'),
   settingsModal: document.getElementById('settingsModal'),
   apiKeyInput: document.getElementById('apiKeyInput'),
+  seoulApiKeyInput: document.getElementById('seoulApiKeyInput'),
   toggleKeyVisibility: document.getElementById('toggleKeyVisibility'),
   eyeIcon: document.getElementById('eyeIcon'),
   modelSelect: document.getElementById('modelSelect'),
@@ -47,16 +50,17 @@ const elements = {
   saveSettingsBtn: document.getElementById('saveSettingsBtn'),
   resetSettingsBtn: document.getElementById('resetSettingsBtn'),
   currentModelBadge: document.getElementById('badgeModelName'),
-  keyWarningBox: document.getElementById('keyWarningBox'),
-  currentPromptStatus: document.getElementById('currentPromptStatus')
+  dataSummaryBanner: document.getElementById('dataSummaryBanner'),
+  dataStatusBadge: document.getElementById('dataStatusBadge')
 };
 
 // Initialize Application
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initMarked();
   loadSettingsUI();
   setupEventListeners();
   checkApiKeyStatus();
+  await loadSeoulEducationData();
 });
 
 // Configure Marked & Highlight.js
@@ -75,17 +79,191 @@ function initMarked() {
   }
 }
 
-// Check API key & show warning if missing
-function checkApiKeyStatus() {
-  const activeKey = getActiveApiKey();
-  if (activeKey) {
-    elements.keyWarningBox.classList.add('hidden');
-  } else {
-    elements.keyWarningBox.classList.remove('hidden');
+// Fetch & Load Real-time Seoul Public Reservation Education Data
+async function loadSeoulEducationData() {
+  const key = state.seoulApiKey || 'sample';
+  const limit = key === 'sample' ? 5 : 100;
+  const url = `http://openAPI.seoul.go.kr:8088/${key}/json/ListPublicReservationEducation/1/${limit}/`;
+
+  try {
+    elements.dataSummaryBanner.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 서울시 열린데이터광장에서 교육 예약 데이터 불러오는 중...`;
+    
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`API HTTP ${response.status}`);
+    
+    const json = await response.json();
+    const resultData = json.ListPublicReservationEducation;
+
+    if (resultData && resultData.row) {
+      state.educationData = resultData.row.map(item => ({
+        id: item.SVCID,
+        title: cleanText(item.SVCNM),
+        category: item.MINCLASSNM || item.MAXCLASSNM || '교육강좌',
+        status: item.SVCSTATNM || '안내중',
+        payType: item.PAYATNM || '무료',
+        place: item.PLACENM || '서울시 공공시설',
+        target: cleanText(item.USETGTINFO) || '누구나',
+        url: item.SVCURL,
+        area: item.AREANM || '서울시',
+        openStart: item.SVCOPNBGNDT ? item.SVCOPNBGNDT.substring(0, 10) : '',
+        openEnd: item.SVCOPNENDDT ? item.SVCOPNENDDT.substring(0, 10) : '',
+        receiptStart: item.RCPTBGNDT ? item.RCPTBGNDT.substring(0, 16) : '',
+        receiptEnd: item.RCPTENDDT ? item.RCPTENDDT.substring(0, 16) : '',
+        tel: item.TELNO || '',
+        img: item.IMGURL || ''
+      }));
+
+      const totalCount = resultData.list_total_count || state.educationData.length;
+      elements.dataSummaryBanner.innerHTML = `
+        <i class="fa-solid fa-circle-check" style="color:#10b981;"></i> 
+        서울시 실시간 공공교육 예약 데이터 <strong>${state.educationData.length}건</strong> (전체 ${totalCount}건) 로드 완료!
+      `;
+    } else {
+      throw new Error(resultData?.RESULT?.MESSAGE || '데이터 없음');
+    }
+  } catch (err) {
+    console.warn('서울시 API 연동 경고 (샘플 데이터 사용):', err);
+    elements.dataSummaryBanner.innerHTML = `
+      <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;"></i> 
+      서울시 API 호출 제한/네트워크 오류로 기본 교육 샘플 데이터로 동작합니다.
+    `;
+    useFallbackEducationData();
   }
 }
 
-// Get active API key (UI state key priority -> Code constant -> LocalStorage fallback)
+// Fallback sample education data
+function useFallbackEducationData() {
+  state.educationData = [
+    {
+      id: 'S260210133959300415',
+      title: "2026년 상·하반기 '내 친구 박물관' 교육생 모집",
+      category: "역사",
+      status: "접수종료",
+      payType: "무료",
+      place: "서울역사박물관",
+      target: "어린이(내 친구 박물관)",
+      url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260210133959300415",
+      area: "종로구",
+      receiptStart: "2026-02-19 10:00",
+      receiptEnd: "2026-03-09 18:00",
+      tel: "02-724-0236"
+    },
+    {
+      id: 'S260519103905622756',
+      title: "내 인생의 18번, 시대의 명곡이 되다 수강생 모집",
+      category: "역사",
+      status: "접수종료",
+      payType: "무료",
+      place: "서울역사박물관",
+      target: "성인(55세 이상 성인)",
+      url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260519103905622756",
+      area: "종로구",
+      receiptStart: "2026-08-19 10:00",
+      receiptEnd: "2026-08-30 17:00",
+      tel: "02-724-0199"
+    },
+    {
+      id: 'S260622155501556026',
+      title: "제49기 <중학생 인턴제> 수강생 모집",
+      category: "역사",
+      status: "접수종료",
+      payType: "무료",
+      place: "서울역사박물관",
+      target: "청소년(중학생 1-3학년)",
+      url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260622155501556026",
+      area: "종로구",
+      receiptStart: "2026-06-29 10:00",
+      receiptEnd: "2026-07-31 17:00",
+      tel: "02-724-0236"
+    },
+    {
+      id: 'S260804164236879206',
+      title: "2026 서울역사박물관대학 (심화반)",
+      category: "역사",
+      status: "접수종료",
+      payType: "무료",
+      place: "서울역사박물관",
+      target: "성인",
+      url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260804164236879206",
+      area: "종로구",
+      receiptStart: "2026-08-14 10:00",
+      receiptEnd: "2026-08-21 17:00",
+      tel: "02-724-0199"
+    },
+    {
+      id: 'S260806090535821750',
+      title: "2026년 하반기 '우리 가족 경희궁 탐험대' 교육생 모집",
+      category: "역사",
+      status: "예약마감",
+      payType: "무료",
+      place: "서울역사박물관",
+      target: "가족(초등학교 1~6학년 자녀 동반)",
+      url: "https://yeyak.seoul.go.kr/web/reservation/selectReservView.do?rsv_svc_id=S260806090535821750",
+      area: "종로구",
+      receiptStart: "2026-08-24 10:00",
+      receiptEnd: "2026-11-15 17:00",
+      tel: "02-724-9750"
+    }
+  ];
+}
+
+// Clean HTML tags and special entities
+function cleanText(text) {
+  if (!text) return '';
+  return text.replace(/<[^>]*>?/gm, '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&middot;/g, '·').trim();
+}
+
+// Search Relevant Programs based on User Question
+function findRelevantEducationItems(query) {
+  if (!state.educationData || state.educationData.length === 0) return [];
+  
+  const q = query.toLowerCase();
+  const keywords = q.split(/\s+/).filter(k => k.length > 1);
+
+  // Score each item based on keyword matches
+  const scored = state.educationData.map(item => {
+    let score = 0;
+    const fullContent = `${item.title} ${item.category} ${item.area} ${item.place} ${item.target} ${item.payType} ${item.status}`.toLowerCase();
+
+    if (q.includes('어린이') || q.includes('초등')) {
+      if (item.target.includes('어린이') || item.target.includes('초등') || item.target.includes('가족')) score += 3;
+    }
+    if (q.includes('성인') || q.includes('시니어')) {
+      if (item.target.includes('성인')) score += 3;
+    }
+    if (q.includes('청소년') || q.includes('중학생') || q.includes('고등')) {
+      if (item.target.includes('청소년') || item.target.includes('중학생')) score += 3;
+    }
+    if (q.includes('무료')) {
+      if (item.payType.includes('무료')) score += 2;
+    }
+    if (q.includes('역사') || q.includes('박물관')) {
+      if (item.category.includes('역사') || item.title.includes('박물관') || item.place.includes('박물관')) score += 3;
+    }
+
+    keywords.forEach(kw => {
+      if (fullContent.includes(kw)) score += 2;
+    });
+
+    return { item, score };
+  });
+
+  // Filter items with score > 0 or top items
+  scored.sort((a, b) => b.score - a.score);
+  const matched = scored.filter(s => s.score > 0).map(s => s.item);
+
+  return matched.length > 0 ? matched.slice(0, 5) : state.educationData.slice(0, 5);
+}
+
+// Check API key status
+function checkApiKeyStatus() {
+  const activeKey = getActiveApiKey();
+  if (activeKey) {
+    elements.dataStatusBadge.classList.add('green');
+  }
+}
+
+// Get active OpenRouter API key
 function getActiveApiKey() {
   if (state.apiKey && state.apiKey.trim() !== "") {
     return state.apiKey.trim();
@@ -99,6 +277,7 @@ function getActiveApiKey() {
 // Load settings into Modal UI
 function loadSettingsUI() {
   elements.apiKeyInput.value = getActiveApiKey();
+  elements.seoulApiKeyInput.value = state.seoulApiKey || 'sample';
 
   // Set Model Select
   const options = Array.from(elements.modelSelect.options).map(opt => opt.value);
@@ -204,24 +383,27 @@ function setupEventListeners() {
 
   // Save Settings
   elements.saveSettingsBtn.addEventListener('click', saveSettings);
-
+  
   // Reset Settings
   elements.resetSettingsBtn.addEventListener('click', resetSettings);
 }
 
-// Save Settings to State & LocalStorage
-function saveSettings() {
+// Save Settings
+async function saveSettings() {
   const newApiKey = elements.apiKeyInput.value.trim();
+  const newSeoulApiKey = elements.seoulApiKeyInput.value.trim() || 'sample';
   const selectedModel = getActiveModel();
   const systemPrompt = elements.systemPromptInput.value.trim();
   const temperature = parseFloat(elements.tempSlider.value);
 
   state.apiKey = newApiKey;
+  state.seoulApiKey = newSeoulApiKey;
   state.model = selectedModel;
   state.systemPrompt = systemPrompt;
   state.temperature = temperature;
 
   localStorage.setItem('openrouter_api_key', newApiKey);
+  localStorage.setItem('seoul_api_key', newSeoulApiKey);
   localStorage.setItem('openrouter_model', selectedModel);
   localStorage.setItem('openrouter_system_prompt', systemPrompt);
   localStorage.setItem('openrouter_temperature', temperature.toString());
@@ -230,23 +412,27 @@ function saveSettings() {
   updateModelBadge();
 
   elements.settingsModal.classList.add('hidden');
+  await loadSeoulEducationData();
   alert('설정이 성공적으로 저장되었습니다!');
 }
 
 // Reset Settings
 function resetSettings() {
   state.apiKey = OPENROUTER_API_KEY;
+  state.seoulApiKey = 'sample';
   state.model = 'google/gemini-2.5-flash';
-  state.systemPrompt = '당신은 친절하고 전문적이며 명확한 설명을 제공하는 스마트 AI 어시스턴트입니다.';
-  state.temperature = 0.7;
+  state.systemPrompt = '당신은 서울시 교육 공공서비스예약 데이터를 기반으로 시민들에게 친절하고 정확하게 교육 프로그램을 추천하고 안내하는 AI 전문 상담원입니다.';
+  state.temperature = 0.5;
 
   localStorage.removeItem('openrouter_api_key');
+  localStorage.removeItem('seoul_api_key');
   localStorage.removeItem('openrouter_model');
   localStorage.removeItem('openrouter_system_prompt');
   localStorage.removeItem('openrouter_temperature');
 
   loadSettingsUI();
   checkApiKeyStatus();
+  loadSeoulEducationData();
 }
 
 // Clear Chat History
@@ -269,14 +455,14 @@ function handleStop() {
   }
 }
 
-// Send User Message
+// Send User Message with Context Injection
 async function handleSend() {
   const userText = elements.userInput.value.trim();
   if (!userText || state.isGenerating) return;
 
   const apiKey = getActiveApiKey();
   if (!apiKey) {
-    alert('OpenRouter API 키가 필요합니다. app.js 코드의 OPENROUTER_API_KEY에 입력하거나 설정에서 입력해주세요.');
+    alert('OpenRouter API 키가 필요합니다. 설정 메뉴에서 입력해주세요.');
     elements.openSettingsBtn.click();
     return;
   }
@@ -292,9 +478,26 @@ async function handleSend() {
   appendMessage('user', userText);
   state.messages.push({ role: 'user', content: userText });
 
+  // Retrieve matching Seoul Public Service Education Items
+  const relevantItems = findRelevantEducationItems(userText);
+  let dataContext = '';
+  
+  if (relevantItems.length > 0) {
+    dataContext = `\n\n[실시간 서울시 공공서비스예약 교육 데이터 참고 정보]\n` +
+      relevantItems.map((item, idx) => `
+${idx + 1}. 강좌명: ${item.title}
+   - 분류/상태: ${item.category} / ${item.status} (${item.payType})
+   - 대상: ${item.target}
+   - 장소: ${item.place} (${item.area})
+   - 접수기간: ${item.receiptStart} ~ ${item.receiptEnd}
+   - 문의전화: ${item.tel}
+   - 예약링크: ${item.url}
+      `).join('\n');
+  }
+
   // Prepare Assistant Message Bubble in UI
   const assistantBubble = appendMessage('assistant', '', true);
-
+  
   // Start Generation
   state.isGenerating = true;
   toggleGeneratingUI(true);
@@ -303,8 +506,10 @@ async function handleSend() {
   let accumulatedContent = '';
 
   try {
+    const fullSystemPrompt = `${state.systemPrompt}\n\n시민의 질문을 참고할 때 제공된 실시간 서울시 교육예약 정보 데이터에 기반하여 답변하세요. 각 추천 프로그램마다 **[예약 바로가기](URL)** 링크와 대상, 장소, 요금을 명확히 카드 형태로 정돈하여 답변해 주세요.${dataContext}`;
+
     const apiMessages = [
-      { role: 'system', content: state.systemPrompt },
+      { role: 'system', content: fullSystemPrompt },
       ...state.messages
     ];
 
@@ -313,7 +518,7 @@ async function handleSend() {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'HTTP-Referer': window.location.href,
-        'X-Title': 'OpenRouter Direct AI Chatbot',
+        'X-Title': 'Seoul Education Reservation AI Chatbot',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -342,7 +547,7 @@ async function handleSend() {
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -360,7 +565,7 @@ async function handleSend() {
             scrollToBottom();
           }
         } catch (err) {
-          // Ignore JSON parse errors for incomplete chunks
+          // Ignore incomplete chunk parse errors
         }
       }
     }
@@ -402,9 +607,9 @@ function appendMessage(role, content, isTyping = false) {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.innerHTML = role === 'user'
-    ? '<i class="fa-solid fa-user"></i>'
-    : '<i class="fa-solid fa-bot"></i>';
+  avatar.innerHTML = role === 'user' 
+    ? '<i class="fa-solid fa-user"></i>' 
+    : '<i class="fa-solid fa-landmark"></i>';
 
   const wrapper = document.createElement('div');
   wrapper.className = 'message-content-wrapper';
